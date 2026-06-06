@@ -68,22 +68,70 @@ pip install tensorflow-metal==1.1.0
 Para resolver la regresión con la máxima velocidad de convergencia, se adoptó la siguiente topología de red:
 
 ```python
-def load_train(path):
-    # Configuración de cargadores eficientes en lotes (batch_size=32)
-    # ...
-    pass
-
-def create_model(input_shape):
-    # Carga de ResNet50 omitiendo las capas de clasificación superiores de ImageNet
-    backbone = ResNet50(input_shape=input_shape, weights='imagenet', include_top=False)
+def load_data(df, subset='training', batch_size=16):
+    """
+    Carga y procesa el flujo de imágenes desde un DataFrame.
+    Aplica Data Augmentation controlado únicamente en el conjunto de entrenamiento.
+    """
+    if subset == 'training':
+        data_datagen = ImageDataGenerator(
+            preprocessing_function=preprocess_input,
+            validation_split=0.2,
+            horizontal_flip=True # Aumento ligero para robustecer frente a simetrías faciales
+        )
+    else:
+        data_datagen = ImageDataGenerator(
+            preprocessing_function=preprocess_input,
+            validation_split=0.2 # Modo espejo estricto para validación/prueba
+        )
     
+    return data_datagen.flow_from_dataframe(
+        dataframe=df,
+        directory="faces/", # Ruta base del repositorio local
+        x_col='file_name',
+        y_col='real_age',
+        target_size=(224, 224),
+        batch_size=batch_size,
+        class_mode='raw',   # 'raw' habilita regresión continua directa de edades
+        subset=subset,
+        seed=12345
+    )
+
+def create_model(input_shape, learning_rate=0.001, freeze_backbone=True, fine_tuning=False, dropout=False):
+    """
+    Construye la topología de la red mediante Transfer Learning (ResNet50 + Custom Top Head).
+    Permite alternar entre congelamiento basal, fine-tuning selectivo y control de sobreajuste.
+    """
+    backbone = ResNet50(weights='imagenet', input_shape=input_shape, include_top=False)
+
+    if freeze_backbone:
+        for layer in backbone.layers:
+            layer.trainable = False
+    elif fine_tuning:
+        print("-> Configurando Fine-Tuning: Liberando las últimas 15 capas de ResNet50.")
+        for layer in backbone.layers:
+            layer.trainable = False
+        for layer in backbone.layers[-15:]: # Ajuste fino segmentado para adaptar pesos complejos
+            layer.trainable = True
+    else:
+        for layer in backbone.layers:
+            layer.trainable = True
+
+    # Bloque de construcción secuencial
     model = Sequential([
         backbone,
-        GlobalAveragePooling2D(), # Reducción de dimensionalidad espacial
-        Dense(1, activation='linear') # Capa de salida especializada en regresión continua
+        GlobalAveragePooling2D()
     ])
+
+    if dropout:
+        model.add(Dropout(0.2)) # Regularización para mitigar variaciones etarias drásticas
+
+    model.add(Dense(1, activation='relu')) # Activación ReLU para prevenir predicciones de edad negativas
+
+    # Solución de rendimiento: LegacyAdam evita cuellos de botella en la GPU del chip M1
+    optimizer = LegacyAdam(learning_rate=learning_rate)
+    model.compile(optimizer=optimizer, loss='mse', metrics=['mae'])
     
-    model.compile(optimizer=Adam(learning_rate=0.0001), loss='mean_absolute_error', metrics=['mae'])
     return model
 ```
 
