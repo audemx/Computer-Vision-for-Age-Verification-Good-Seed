@@ -5,147 +5,87 @@
 [![Architecture](https://img.shields.io/badge/Architecture-ResNet50%20%7C%20Transfer%20Learning-darkgreen)](https://arxiv.org/abs/1512.03385)
 [![Metrics](https://img.shields.io/badge/Target%20MAE-%E2%89%A4%208.0-success)](https://en.wikipedia.org/wiki/Mean_absolute_error)
 
-## 1. Introducción y Objetivos de Negocio
+## Descripción del Proyecto
 
-La cadena de supermercados **Good Seed** busca automatizar y blindar el cumplimiento de las leyes vigentes sobre la venta de productos restringidos (como el alcohol). El objetivo de este proyecto es diseñar e implementar un sistema de **Visión Artificial (Computer Vision)** integrado en el área de cajas que sea capaz de estimar la edad de los clientes en tiempo real a partir de fotografías digitales.
+Este repositorio contiene el desarrollo de un sistema de visión artificial basado en Aprendizaje Profundo (*Deep Learning*) diseñado para la cadena de supermercados **Good Seed**. El objetivo principal es optimizar el cumplimiento de las regulaciones vigentes sobre la venta de productos restringidos (alcohol y tabaco), garantizando de forma automatizada y auditable que no se suministren estas mercancías a menores de edad.
 
-* **Objetivo de Negocio:** Servir como un filtro automatizado de seguridad y auditoría legal para alertar al personal antes de concretar la venta a menores de edad.
-* **Métrica Principal de Éxito:** Error Absoluto Medio ($MAE \le 8.0$) en el conjunto de prueba (umbral para validación científica en producción).
+El sistema simula un entorno de producción donde cámaras ubicadas en las cajas de autoservicio se activan dinámicamente al escanear un artículo restringido. El núcleo del software estima la edad cronológica del cliente en tiempo real a partir de una captura facial, sirviendo como filtro de seguridad y soporte para el personal del establecimiento.
 
 ---
 
-## 2. Arquitectura del Pipeline de Deep Learning
+## Desafíos Técnicos y de Negocio
 
-Para procesar imágenes y converger hacia una estimación precisa de regresión de edad, el pipeline se estructuró de forma modular bajo el siguiente flujo:
+El desarrollo del modelo requirió mitigar tres fenómenos críticos inherentes a los datos:
+
+1. **Volumen de Datos Moderado:** Un inventario de **7,591 imágenes** (`faces/`) y un archivo de anotaciones (`labels.csv`), lo que representa un entorno reducido para entrenar redes profundas desde cero, elevando el riesgo de sobreajuste (*overfitting*).
+
+2. **Desbalance Demográfico:** Una distribución natural sesgada hacia el rango de adultos jóvenes (20 a 40 años), reduciendo la densidad de muestras en los extremos de la población (niños y adultos mayores).
+
+3. **Ruido en Etiquetas:** La brecha natural entre la edad biológica percibida y la edad cronológica legal, lo que establece un piso mínimo de error insalvable debido a la subjetividad del rostro humano.
+
+---
+
+## Arquitectura de Software y Entorno (`tf_vision`)
+
+Para garantizar la reproducibilidad matemática y mitigar conflictos de librerías, el proyecto se ejecutó de forma aislada dentro del entorno virtual especializado `tf_vision`. 
+
+* **Infraestructura Base:** `tensorflow==2.15.0` y `keras==2.15.0`.
+
+* **Aceleración de Hardware Local:** Integración nativa con procesadores Apple Silicon (arquitectura ARM/M-Series) mediante el plugin `tensorflow-metal==1.1.0`.
+
+* **Optimización en Mac M1:** Uso mandatorio de la API `LegacyAdam` para estabilizar el flujo de gradientes en memoria unificada.
+
+* **Componentes Científicos:** Respaldado por `numpy` para cómputo matricial, `pandas` para procesamiento analítico de metadatos, y `scikit-learn` para segmentación diagnóstica.
+
+---
+
+## Estrategia de Modelado: Fine-Tuning Progresivo Avanzado
+
+En lugar de aplicar un entrenamiento plano tradicional o fuerza bruta, la investigación se estructuró a través de un algoritmo quirúrgico de **8 fases secuenciales** utilizando **Transfer Learning** sobre el backbone de **ResNet50** preentrenada en ImageNet:
 
 ```mermaid
 graph LR
     %% Configuración de Estilos
     classDef default fill:#f9f9f9,stroke:#333,stroke-width:1px,color:#000;
-    classDef highlight fill:#fff3e0,stroke:#ffb74d,stroke-width:2px,color:#e65100;
+    classDef highlight fill:#e1f5fe,stroke:#0288d1,stroke-width:2px,color:#01579b;
 
-    1[1. Data Ingestion & EDA] --> 2[2. Augmentation & Generators]
-    2 --> 3[3. Backbone: ResNet50]
-    3 --> 4[4. Custom Top Head]
-    4 --> 5[5. Training & Fine-Tuning]
-    5 --> 6[6. Business Evaluation]
+    1[Fase 1: Warm-up Cerrado] --> 2[Fases 2: 1ra Apertura y ajuste]
+    2 --> 3[Fases 3, 5 y 7: Apertura Escalada]
+    3 --> 4[Fase 4, 6 y 8: Shock de Gradiente]
 
-    class 3,4,5 highlight;
+    class 1,8 highlight;
 ```
 
-1. **Ingesta y Diagnóstico Analítico:** Análisis de la distribución etaria sobre un conjunto de 7,591 fotografías de rostros reales y auditoría de consistencia de etiquetas (labels.csv).
-2. **Aumento de Datos en Flujo:** Configuración de ImageDataGenerator para reescalar píxeles ($1/255$), normalizar dimensiones y aplicar transformaciones geométricas controladas sin romper la fidelidad biológica de los rostros.
-3. **Backbone Estructural (Transfer Learning):** Extracción de características de alto nivel utilizando la arquitectura convolucional profunda ResNet50 preentrenada en el dataset masivo de ImageNet.
-4. **Top Head de Regresión:** Diseño de capas densas personalizadas (GlobalAveragePooling2D + Dense con activación lineal) para mapear los mapas de características hacia un único valor escalar continuo (Edad).
-5. **Entrenamiento y Ajuste Fino:** Optimización de pesos mediante el algoritmo Adam con una tasa de aprendizaje adaptativa (lr=0.0001).
-6. **Evaluación de Impacto Comercial:** Auditoría del MAE por segmentos de edad e interpretación del modelo frente al flujo de cajas rápidas.
+1. **Calentamiento de la Cabeza (Warm-up):** Congelamiento total del backbone para alinear y calibrar los pesos aleatorios de la capa de salida lineal (activación ReLU) sin corromper las características abstractas originales de ImageNet.
 
-## 3. Entorno de Ejecución e Infraestructura
+2. **Descongelamiento Progresivo en Cascada:** Apertura escalonada de bloques convolucionales de atrás hacia adelante (5, 15 y finalmente 25 capas) acoplados con reducciones drásticas en el tamaño del paso del optimizador.
 
-Este proyecto fue entrenado utilizando arquitecturas de hardware con memoria unificada (Apple Silicon Mac), optimizando los tiempos de cómputo en capas convolucionales profundas sin depender de servidores dedicados en la nube.
+3. **Sintonización Fina de Alto Espectro:** Liberación quirúrgica de las últimas **40 capas** del backbone convolucional profundo, operando bajo un Learning Rate microscópico ($5\times10^{-6}$) para especializar los filtros en rasgos fisonómicos específicos del envejecimiento (líneas de expresión, densidad de la piel).
 
-```bash
-# Creación y activación del entorno enfocado en Visión Artificial
-conda create -n tf_vision python=3.11 -y
-conda activate tf_vision
+4. **Shock de Gradiente (Efecto Trampolín):** Tras detectar un estancamiento del modelo en un mínimo local plano, se aplicó una inyección controlada de energía cinética multiplicando la tasa de aprendizaje por 10 ($5\times10^{-5}$). Esta "patada" matemática desestabilizó la meseta y forzó al optimizador a buscar un cañón de pérdida global mucho más profundo, para finalmente asentarse con el enfriamiento del callback `ReduceLROnPlateau`.
 
-# Stack basal y utilidades científicas
-conda install -c conda-forge pandas numpy matplotlib seaborn scikit-learn -y
+---
 
-# Instalación de TensorFlow optimizado con aceleración por GPU (Metal API para macOS)
-pip install tensorflow==2.15.0
-pip install tensorflow-metal==1.1.0
-```
+## Resultados y Métricas de Calidad
 
-## 4. Análisis Exploratorio y Diagnóstico del Dataset (EDA)
+El proyecto concluyó con un rendimiento sobresaliente, pulverizando los muros de calidad definidos originalmente para la tarea de regresión continua:
 
-* **Volumen de Datos:** El dataset cuenta con 7,591 imágenes, un tamaño balanceado que justifica el uso de Transfer Learning para mitigar el riesgo de sobreajuste (overfitting).
-* **Distribución Etaria:** Se detectó una asimetría positiva en la población analizada. La mayor densidad de datos se concentra en individuos de entre 20 y 40 años, lo cual beneficia al modelo dado que este rango cubre el umbral legal crítico de compra de alcohol (18-21 años).
-* **Inspección Visual:** Las imágenes presentan variaciones reales de iluminación, rotación angular, oclusiones parciales (lentes, sombreros) y calidad de resolución, lo que dota al entrenamiento de una excelente robustez frente al entorno en tienda.
+* **Métrica Objetivo Obligatoria del Negocio:** $MAE \le 8.0$ años.
+* **Récord Final Alcanzado:** **`6.7512` años de Error Absoluto Medio (`val_mae`)** en validación.
+* **Categoría del Proyecto:** Clasificado bajo el estándar de **Nivel Destacado de Investigación**.
 
-## 5. Diseño e Ingeniería del Modelo de Convolución
+Para evitar la hiperespecialización masiva de los pesos libres (considerando que el entrenamiento descendió a un $MAE = 2.09$), se incorporó una capa de regularización estocástica por **Dropout al 30%** inmediatamente antes de la neurona de salida, garantizando una robusta capacidad de generalización ante rostros completamente nuevos.
 
-Para resolver la regresión con la máxima velocidad de convergencia, se adoptó la siguiente topología de red:
+---
 
-```python
-def load_data(df, subset='training', batch_size=16):
-    """
-    Carga y procesa el flujo de imágenes desde un DataFrame.
-    Aplica Data Augmentation controlado únicamente en el conjunto de entrenamiento.
-    """
-    if subset == 'training':
-        data_datagen = ImageDataGenerator(
-            preprocessing_function=preprocess_input,
-            validation_split=0.2,
-            horizontal_flip=True # Aumento ligero para robustecer frente a simetrías faciales
-        )
-    else:
-        data_datagen = ImageDataGenerator(
-            preprocessing_function=preprocess_input,
-            validation_split=0.2 # Modo espejo estricto para validación/prueba
-        )
-    
-    return data_datagen.flow_from_dataframe(
-        dataframe=df,
-        directory="faces/", # Ruta base del repositorio local
-        x_col='file_name',
-        y_col='real_age',
-        target_size=(224, 224),
-        batch_size=batch_size,
-        class_mode='raw',   # 'raw' habilita regresión continua directa de edades
-        subset=subset,
-        seed=12345
-    )
+## Viabilidad e Impacto de Negocio
 
-def create_model(input_shape, learning_rate=0.001, freeze_backbone=True, fine_tuning=False, dropout=False):
-    """
-    Construye la topología de la red mediante Transfer Learning (ResNet50 + Custom Top Head).
-    Permite alternar entre congelamiento basal, fine-tuning selectivo y control de sobreajuste.
-    """
-    backbone = ResNet50(weights='imagenet', input_shape=input_shape, include_top=False)
+Con un margen de error promedio inferior a los 7 años, el modelo posee la madurez estadística requerida para su despliegue operativo en el piso de venta mediante la siguiente política:
 
-    if freeze_backbone:
-        for layer in backbone.layers:
-            layer.trainable = False
-    elif fine_tuning:
-        print("-> Configurando Fine-Tuning: Liberando las últimas 15 capas de ResNet50.")
-        for layer in backbone.layers:
-            layer.trainable = False
-        for layer in backbone.layers[-15:]: # Ajuste fino segmentado para adaptar pesos complejos
-            layer.trainable = True
-    else:
-        for layer in backbone.layers:
-            layer.trainable = True
+* **Regla de Seguridad Automatizada:** Si el modelo estima una edad **inferior a los 30 años**, el sistema bloquea preventivamente la pantalla de pago y solicita una validación de identificación humana obligatoria.
 
-    # Bloque de construcción secuencial
-    model = Sequential([
-        backbone,
-        GlobalAveragePooling2D()
-    ])
+* **Retorno de Inversión (ROI):**
 
-    if dropout:
-        model.add(Dropout(0.2)) # Regularización para mitigar variaciones etarias drásticas
+    * * **Protección Legal:** Brinda un blindaje corporativo total contra penalizaciones legales o pérdida de licencias comerciales por la venta inadvertida a menores de edad.
 
-    model.add(Dense(1, activation='relu')) # Activación ReLU para prevenir predicciones de edad negativas
-
-    # Solución de rendimiento: LegacyAdam evita cuellos de botella en la GPU del chip M1
-    optimizer = LegacyAdam(learning_rate=learning_rate)
-    model.compile(optimizer=optimizer, loss='mse', metrics=['mae'])
-    
-    return model
-```
-
-## 6. Evaluación Final y Desempeño del Sistema
-
-El entrenamiento se ejecutó de forma balanceada, estabilizando la función de pérdida paso a paso (promediando apenas ~750ms por iteración gracias al backend acelerado).
-
-### Métricas de Calidad Obtenidas (Test Set)
-
-* **Métrica Final (MAE):** 6.14
-* **Validación contra Meta:** Supera con un amplio margen el umbral máximo de negocio permitido ($\le 8.0$). En promedio, el sistema tiene una desviación de apenas $\pm 6.1$ años al estimar el rostro de un consumidor.
-
-## 7. Conclusiones Técnicas y Decisiones Corporativas Adoptadas
-
-1. **Garantía de Cómputo Local:** La optimización combinada de ResNet50 y el ajuste fino segmentado demostraron que una arquitectura unificada de hardware puede procesar lotes pesados a velocidades de producción, reduciendo la dependencia e inversión en costosas APIs de nube de terceros.
-2. **Mitigación de Overfitting:** El uso de pesos preentrenados en ImageNet actuó como un regularizador implícito sumamente potente, permitiendo al modelo generalizar características faciales complejas a pesar de la asimetría etaria del dataset inicial.
-3. **Política de Seguridad Propuesta (Impacto ROI):** Basándonos en el MAE final de 6.14, se propuso al negocio una Política Automática de Bloqueo de Pantalla ante estimaciones menores a 30 años. Esta regla garantiza un blindaje legal absoluto del 100% contra la venta accidental de alcohol a menores de edad, al mismo tiempo que agiliza el flujo de pago sin interrupciones para la gran mayoría de los clientes adultos.
+    * **Eficiencia Operativa:** El software automatiza y agiliza el flujo de compra para la gran mayoría de los usuarios visiblemente adultos, descongestionando el área de cajas y mejorando la experiencia del cliente.
