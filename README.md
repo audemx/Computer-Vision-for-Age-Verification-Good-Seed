@@ -1,4 +1,4 @@
-# Automated Age Verification using Computer Vision
+# Automated Age Verification Using Computer Vision
 **Advanced Optimization Project for the "Good Seed" Supermarket Chain**
 
 [![Python](https://img.shields.io/badge/Python-3.11-blue.svg)](https://www.python.org/)
