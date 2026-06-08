@@ -50,18 +50,18 @@ graph LR
     classDef default fill:#f9f9f9,stroke:#333,stroke-width:1px,color:#000;
     classDef highlight fill:#e1f5fe,stroke:#0288d1,stroke-width:2px,color:#01579b;
 
-    1[Fase 1: Warm-up Cerrado] --> 2[Fases 2: 1ra Apertura y ajuste]
+    1[Fase 1: Warm-up Cerrado] --> 2[Fases 2: 1ra Apertura y Habituación]
     2 --> 3[Fases 3, 5 y 7: Apertura Escalada]
     3 --> 4[Fase 4, 6 y 8: Shock de Gradiente]
 
-    class 1,8 highlight;
+    class 1 highlight;
 ```
 
 1. **Calentamiento de la Cabeza (Warm-up):** Congelamiento total del backbone para alinear y calibrar los pesos aleatorios de la capa de salida lineal (activación ReLU) sin corromper las características abstractas originales de ImageNet.
 
-2. **Descongelamiento Progresivo en Cascada:** Apertura escalonada de bloques convolucionales de atrás hacia adelante (5, 15 y finalmente 25 capas) acoplados con reducciones drásticas en el tamaño del paso del optimizador.
+2. **Liberación de capas:** Se liberan las últimas 5 capas convolucionales con un `LR` moderadamente elevado y con reducción dinámica para optimizar progresivamente los pesos de razgos más especializados.
 
-3. **Sintonización Fina de Alto Espectro:** Liberación quirúrgica de las últimas **40 capas** del backbone convolucional profundo, operando bajo un Learning Rate microscópico ($5\times10^{-6}$) para especializar los filtros en rasgos fisonómicos específicos del envejecimiento (líneas de expresión, densidad de la piel).
+3. **Descongelamiento Progresivo en Cascada:** Apertura escalonada de bloques convolucionales de atrás hacia adelante (15, 25 y 40 capas) acoplados con reducciones drásticas en el tamaño del paso del optimizador para habituación.
 
 4. **Shock de Gradiente (Efecto Trampolín):** Tras detectar un estancamiento del modelo en un mínimo local plano, se aplicó una inyección controlada de energía cinética multiplicando la tasa de aprendizaje por 10 ($5\times10^{-5}$). Esta "patada" matemática desestabilizó la meseta y forzó al optimizador a buscar un cañón de pérdida global mucho más profundo, para finalmente asentarse con el enfriamiento del callback `ReduceLROnPlateau`.
 
