@@ -1,4 +1,5 @@
-# Computer Vision for Age Verification | Good Seed
+# Automated Age Verification using Computer Vision
+**Advanced Optimization Project for the "Good Seed" Supermarket Chain**
 
 [![Python](https://img.shields.io/badge/Python-3.11-blue.svg)](https://www.python.org/)
 [![Framework](https://img.shields.io/badge/Framework-TensorFlow%20%7C%20Keras-red)](https://www.tensorflow.org/)
