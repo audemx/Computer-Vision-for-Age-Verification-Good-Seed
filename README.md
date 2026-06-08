@@ -20,7 +20,7 @@ El desarrollo del modelo requirió mitigar tres fenómenos críticos inherentes 
 
 1. **Volumen de Datos Moderado:** Un inventario de **7,591 imágenes** (`faces/`) y un archivo de anotaciones (`labels.csv`), lo que representa un entorno reducido para entrenar redes profundas desde cero, elevando el riesgo de sobreajuste (*overfitting*).
 
-2. **Desbalance Demográfico:** Una distribución natural sesgada hacia el rango de adultos jóvenes (20 a 40 años), reduciendo la densidad de muestras en los extremos de la población (niños y adultos mayores).
+2. **Desbalance Demográfico:** Una distribución natural sesgada hacia el rango de adultos jóvenes (20 a 40 años), reduciendo la densidad de muestras en los extremos de la población (niños y adultos mayores). *Una mejora significativa provendría de equilibrar el desvalance de edades, principalmente de aquellos que se busca blindar (15-21 años)*
 
 3. **Ruido en Etiquetas:** La brecha natural entre la edad biológica percibida y la edad cronológica legal, lo que establece un piso mínimo de error insalvable debido a la subjetividad del rostro humano.
 
@@ -83,7 +83,7 @@ Para evitar la hiperespecialización masiva de los pesos libres (considerando qu
 
 Con un margen de error promedio inferior a los 7 años, el modelo posee la madurez estadística requerida para su despliegue operativo en el piso de venta mediante la siguiente política:
 
-* **Regla de Seguridad Automatizada:** Si el modelo estima una edad **inferior a los 30 años**, el sistema bloquea preventivamente la pantalla de pago y solicita una validación de identificación humana obligatoria.
+* **Regla de Seguridad Automatizada:** Si el modelo estima una edad **inferior a los 28 años**, el sistema bloquea preventivamente la pantalla de pago y solicita una validación de identificación humana obligatoria.
 
 * **Retorno de Inversión (ROI):**
 
